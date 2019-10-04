@@ -95,7 +95,6 @@ commands:
           paths:
             - node_modules
 
-
   build-android:
     description: "Builds the android app"
     steps:
@@ -131,10 +130,10 @@ commands:
       - attach_workspace:
           at: ~/mattermost-mobile
       - ios-gem-dependencies
-      - run:
-          working_directory: fastlane
-          name: Run match to sync adhoc profiles
-          command: bundle exec fastlane ios adhoc
+#      - run:
+#          working_directory: fastlane
+#          name: Run match to sync adhoc profiles
+#          command: bundle exec fastlane ios adhoc
       - run:
           working_directory: fastlane
           name: Run fastlane to build iOS
@@ -262,7 +261,7 @@ workflows:
             - test
           filters:
             branches:
-              only: ci
+              ignore: ci
       - ios-release:
           context: mattermost-mobile
           requires:
