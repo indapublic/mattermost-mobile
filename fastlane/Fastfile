@@ -462,6 +462,7 @@ platform :ios do
         export_method: method,
         skip_profile_detection: true,
         output_name: "#{app_name_sub}.ipa",
+        export_xcargs: "-allowProvisioningUpdates",
         export_options: {
             signingStyle: 'manual',
             iCloudContainerEnvironment: 'Production'
