@@ -218,6 +218,25 @@ jobs:
     steps:
       - build-ios
 
+  ios-release:
+    executor: ios
+    environment:
+      APP_NAME: "Mattermost"
+      BETA_BUILD: false
+      REPLACE_ASSETS: true
+      MAIN_APP_IDENTIFIER: "com.mattermost.rn"
+      SENTRY_ENABLED: false
+      SEGMENT_API_KEY: ${SEGMENT_API_KEY_PROD}
+      MATCH_TYPE: appstore
+      MATCH_APP_IDENTIFIER: 'com.mattermost.rn.NotificationService,com.mattermost.rn.MattermostShare,com.mattermost.rn'
+      EXTENSION_APP_IDENTIFIER: 'com.mattermost.rn.MattermostShare'
+      NOTIFICATION_SERVICE_IDENTIFIER: 'com.mattermost.rn.NotificationService'
+      IOS_APP_GROUP: 'group.com.mattermost'
+      IOS_ICLOUD_CONTAINER: 'iCloud.com.mattermost.rn'
+      IOS_BUILD_EXPORT_METHOD: 'app-store'
+    steps:
+      - build-ios
+
 workflows:
   version: 2
   test-and-build:
@@ -238,6 +257,13 @@ workflows:
             branches:
               ignore: ci
       - ios-beta:
+          context: mattermost-mobile
+          requires:
+            - test
+          filters:
+            branches:
+              only: ci
+      - ios-release:
           context: mattermost-mobile
           requires:
             - test
