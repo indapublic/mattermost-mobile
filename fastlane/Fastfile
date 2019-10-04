@@ -448,7 +448,7 @@ platform :ios do
   end
 
   def setup_ci
-    if ENV["CIRCLE_CI"] == 'true'
+    if ENV["CIRCLECI"] == 'true'
       disable_automatic_code_signing(path: './ios/Mattermost.xcodeproj')
 
       ENV['MATCH_APP_IDENTIFIER'].split(',').each do |id|
