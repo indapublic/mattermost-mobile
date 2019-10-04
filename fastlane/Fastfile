@@ -465,7 +465,6 @@ platform :ios do
             xcodeproj: './ios/Mattermost.xcodeproj',
             profile: ENV["#{profile}_profile-path"], # optional if you use sigh
             target_filter: ".*#{target}$", # matches name or type of a target
-            code_signing_identity: "iOS Distribution" # optionally specify the codesigning identity
         )
       end
     end
