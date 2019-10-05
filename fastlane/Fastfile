@@ -726,11 +726,15 @@ def submit_to_testflight(ipa_path)
   app_name =  ENV['APP_NAME'] || 'Mattermost Beta'
   app_name_sub = app_name.gsub(" ", "_")
 
-  UI.success("ipa file #{ipa_path}")
-
-  upload_to_tesflight(
-      ipa: ipa_path
-  )
+  if(File.file?(ipa_path))
+    UI.success("ipa file #{ipa_path}")
+    # upload_to_tesflight(
+    #     ipa: ipa_path
+    # )
+  else
+    UI.user_error! "ipa file does not exist #{ipa_path}"
+    return
+  end
 
   version_number = get_version_number(xcodeproj: './ios/Mattermost.xcodeproj', target: 'Mattermost')
   build_number = get_build_number(xcodeproj: './ios/Mattermost.xcodeproj')
@@ -763,13 +767,17 @@ def submit_to_google_play(apk_path)
   app_name =  ENV['APP_NAME'] || 'Mattermost Beta'
   app_name_sub = app_name.gsub(" ", "_")
 
-  UI.success("apk file #{apk_path}")
-
-  unless ENV['SUPPLY_JSON_KEY'].nil? || ENV['SUPPLY_JSON_KEY'].empty?
-    supply(
-        track: ENV['SUPPLY_TRACK'] || 'alpha',
-        apk: apk_path
-    )
+  if(File.file?(apk_path))
+    UI.success("apk file #{apk_path}")
+    # unless ENV['SUPPLY_JSON_KEY'].nil? || ENV['SUPPLY_JSON_KEY'].empty?
+    #   supply(
+    #       track: ENV['SUPPLY_TRACK'] || 'alpha',
+    #       apk: apk_path
+    #   )
+    # end
+  else
+    UI.user_error! "apk file does not exist #{apk_path}"
+    return
   end
 
   version_number = android_get_version_name(gradle_file: './android/app/build.gradle')

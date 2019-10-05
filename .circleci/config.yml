@@ -2,6 +2,10 @@ version: 2.1
 
 executors:
   android:
+    parameters:
+      resource_class:
+        default: large
+        type: string
     environment:
       NODE_OPTIONS: --max_old_space_size=12000
       NODE_ENV: production
@@ -9,7 +13,7 @@ executors:
     docker:
       - image: circleci/android:api-27-node
     working_directory: ~/mattermost-mobile
-    resource_class: large
+    resource_class: <<parameters.resource_class>>
 
   ios:
     environment:
@@ -64,9 +68,27 @@ commands:
             - ~/.gradle
           key: v1-gradle-{{ checksum "android/build.gradle" }}-{{ checksum  "android/app/build.gradle" }}
 
+  assets:
+    description: "Generate app assets"
+    steps:
+      - restore_cache:
+          name: Restore assets cache
+          key: v1-assets-{{ checksum "assets/base/config.json" }}-{{ arch }}
+      - run:
+          name: Generate assets
+          command: make dist/assets
+      - save_cache:
+          name: Save assets cache
+          key: v1-assets-{{ checksum "assets/base/config.json" }}-{{ arch }}
+          paths:
+            - dist
+
   ios-gem-dependencies:
     description: "Get Fastlane dependencies for iOS builds"
     steps:
+      - run:
+          name: Set Ruby version
+          command:  echo "ruby-2.6.3" > ~/.ruby-version
       - restore_cache:
           name: Restore Fastlane cache
           key: v1-gems-ios-{{ checksum "fastlane/Gemfile.lock" }}-{{ arch }}
@@ -96,13 +118,13 @@ commands:
             - node_modules
 
   build-android:
-    description: "Builds the android app"
+    description: "Build the android app"
     steps:
       - checkout:
           path: ~/mattermost-mobile
       - checkout-private
-      - attach_workspace:
-          at: ~/mattermost-mobile
+      - npm-dependencies
+      - assets
       - android-gem-dependencies
       - android-gradle-dependencies
       - run:
@@ -119,26 +141,61 @@ commands:
           command: bundle exec fastlane android build || exit 1
 
   build-ios:
-    description: "Builds the iOS app"
+    description: "Build the iOS app"
     steps:
       - checkout:
           path: ~/mattermost-mobile
       - npm-dependencies
-      - run:
-          name: Set Ruby version
-          command:  echo "ruby-2.6.3" > ~/.ruby-version
-      - attach_workspace:
-          at: ~/mattermost-mobile
+      - assets
       - ios-gem-dependencies
-#      - run:
-#          working_directory: fastlane
-#          name: Run match to sync adhoc profiles
-#          command: bundle exec fastlane ios adhoc
       - run:
           working_directory: fastlane
           name: Run fastlane to build iOS
           no_output_timeout: 30m
           command: bundle exec fastlane ios build || exit 1
+
+  deploy-android:
+    description: "Deploy apk to Google Play"
+    parameters:
+      apk_path:
+        type: string
+    steps:
+      - attach_workspace:
+          at: ~/mattermost-mobile
+      - deploy:
+          name: "Deploy apk to Google Play"
+          working_directory: fastlane
+          command: bundle exec fastlane android deploy apk:../<<parameters.apk_path>>
+
+  deploy-ios:
+    description: "Deploy ipa to TestFlight"
+    parameters:
+      ipa_path:
+        type: string
+    steps:
+      - attach_workspace:
+          at: ~/mattermost-mobile
+      - deploy:
+          name: "Deploy ipa to TestFlight"
+          working_directory: fastlane
+          command: bundle exec fastlane ios deploy ipa:../<<parameters.ipa_path>>
+
+  persist:
+    description: "Persist mattermost-mobile directory"
+    steps:
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - ./
+
+  save:
+    description: "Save binaries artifacts"
+    parameters:
+      filename:
+        type: string
+    steps:
+      - store_artifacts:
+          path: ~/mattermost-mobile/<<parameters.filename>>
 
 jobs:
   test:
@@ -149,34 +206,18 @@ jobs:
       - checkout:
           path: ~/mattermost-mobile
       - npm-dependencies
-      - restore_cache:
-          name: Restore assets cache
-          key: v1-assets-{{ checksum "assets/base/config.json" }}-{{ arch }}
-      - run:
-          name: Generate assets
-          command: make dist/assets
-      - save_cache:
-          name: Save assets cache
-          key: v1-assets-{{ checksum "assets/base/config.json" }}-{{ arch }}
-          paths:
-            - dist
+      - assets
       - run:
           name: Check styles
           command: npm run check
       - run:
           name: Running Tests
           command: npm test
-      - persist_to_workspace:
-          root: ~/mattermost-mobile
-          paths:
-            - node_modules
-            - dist
 
-  android-beta:
+  build-android-beta:
     executor: android
     environment:
       APP_NAME: "Mattermost Beta"
-      BETA_BUILD: true
       REPLACE_ASSETS: false
       MAIN_APP_IDENTIFIER: "com.mattermost.rnbeta"
       SENTRY_ENABLED: false
@@ -184,12 +225,14 @@ jobs:
       TELEMETRY_ENABLED: true
     steps:
       - build-android
+      - persist
+      - save:
+          filename: "Mattermost_Beta.apk"
 
-  android-release:
+  build-android-release:
     executor: android
     environment:
       APP_NAME: "Mattermost"
-      BETA_BUILD: false
       REPLACE_ASSETS: true
       MAIN_APP_IDENTIFIER: "com.mattermost.rn"
       SENTRY_ENABLED: false
@@ -197,12 +240,14 @@ jobs:
       TELEMETRY_ENABLED: false
     steps:
       - build-android
+      - persist
+      - save:
+          filename: "Mattermost.apk"
 
-  ios-beta:
+  build-ios-beta:
     executor: ios
     environment:
       APP_NAME: "Mattermost Beta"
-      BETA_BUILD: true
       REPLACE_ASSETS: false
       MAIN_APP_IDENTIFIER: "com.mattermost.rnbeta"
       SENTRY_ENABLED: false
@@ -216,12 +261,14 @@ jobs:
       IOS_BUILD_EXPORT_METHOD: 'app-store'
     steps:
       - build-ios
+      - persist
+      - save:
+          filename: "Mattermost_Beta.ipa"
 
-  ios-release:
+  build-ios-release:
     executor: ios
     environment:
       APP_NAME: "Mattermost"
-      BETA_BUILD: false
       REPLACE_ASSETS: true
       MAIN_APP_IDENTIFIER: "com.mattermost.rn"
       SENTRY_ENABLED: false
@@ -235,37 +282,111 @@ jobs:
       IOS_BUILD_EXPORT_METHOD: 'app-store'
     steps:
       - build-ios
+      - persist
+      - save:
+          filename: "Mattermost.ipa"
+
+  deploy-android-release:
+    executor:
+      name: android
+      resource_class: medium
+    environment:
+      APP_NAME: "Mattermost"
+      BETA_BUILD: false
+    steps:
+      - deploy-android:
+          apk_path: Mattermost.apk
+
+  deploy-android-beta:
+    executor:
+      name: android
+      resource_class: medium
+    environment:
+      APP_NAME: "Mattermost Beta"
+      BETA_BUILD: true
+    steps:
+      - deploy-android:
+          apk_path: Mattermost_Beta.apk
+
+  deploy-ios-release:
+    executor: ios
+    environment:
+      APP_NAME: "Mattermost"
+      BETA_BUILD: false
+    steps:
+      - deploy-ios:
+          ipa_path: Mattermost.ipa
+
+  deploy-ios-beta:
+    executor: ios
+    environment:
+      APP_NAME: "Mattermost Beta"
+      BETA_BUILD: true
+    steps:
+      - deploy-ios:
+          ipa_path: Mattermost_Beta.ipa
 
 workflows:
   version: 2
   test-and-build:
     jobs:
       - test
-      - android-release:
+      - build-android-release:
           context: mattermost-mobile
           requires:
             - test
           filters:
             branches:
               only: ci
-      - android-beta:
+      - deploy-android-release:
+          context: mattermost-mobile
+          requires:
+            - build-android-release
+          filters:
+            branches:
+              only: ci
+
+      - build-android-beta:
           context: mattermost-mobile
           requires:
             - test
           filters:
             branches:
               only: ci
-      - ios-beta:
+      - deploy-android-beta:
+          context: mattermost-mobile
+          requires:
+            - build-android-beta
+          filters:
+            branches:
+              only: ci
+
+      - build-ios-release:
           context: mattermost-mobile
           requires:
             - test
           filters:
             branches:
               only: ci
-      - ios-release:
+      - deploy-ios-release:
+          context: mattermost-mobile
+          requires:
+            - build-ios-release
+          filters:
+            branches:
+              only: ci
+
+      - build-ios-beta:
           context: mattermost-mobile
           requires:
             - test
+          filters:
+            branches:
+              only: ci
+      - deploy-ios-beta:
+          context: mattermost-mobile
+          requires:
+            - build-ios-beta
           filters:
             branches:
               only: ci
