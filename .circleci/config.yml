@@ -247,21 +247,21 @@ workflows:
             - test
           filters:
             branches:
-              ignore: ci
+              only: ci
       - android-beta:
           context: mattermost-mobile
           requires:
             - test
           filters:
             branches:
-              ignore: ci
+              only: ci
       - ios-beta:
           context: mattermost-mobile
           requires:
             - test
           filters:
             branches:
-              ignore: ci
+              only: ci
       - ios-release:
           context: mattermost-mobile
           requires:
